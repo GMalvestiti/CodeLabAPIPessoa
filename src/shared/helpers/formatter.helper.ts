@@ -1,11 +1,11 @@
 ﻿export const idFormat = (value: number): string => {
   return value.toString().padStart(6, '0');
 };
-  
+
 export const monetaryFormat = (value: number, decimal: number): string => {
   return Number(value).toFixed(decimal).replace(',', '').replace('.', ',');
 };
-  
+
 export const mobilePhoneFormat = (value: string): string => {
   const numericValue = value.replace(/\D/g, '');
 

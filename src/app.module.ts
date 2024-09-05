@@ -15,7 +15,7 @@ import { LoggerMiddleware } from './shared/middleware/logger.middleware';
 
     DatabaseModule,
     PessoaModule,
-  ]
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

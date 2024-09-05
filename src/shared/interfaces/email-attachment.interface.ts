@@ -1,4 +1,4 @@
 ﻿export interface IEmailAttachment {
-    filename: string;
-    base64: string;
+  filename: string;
+  base64: string;
 }
