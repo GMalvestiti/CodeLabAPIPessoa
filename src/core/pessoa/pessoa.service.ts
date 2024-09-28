@@ -13,7 +13,6 @@ import { Repository } from 'typeorm';
 import { EnviarEmailDto } from '../../shared/dtos/enviar-email.dto';
 import { EMensagem } from '../../shared/enums/mensagem.enum';
 import { mobilePhoneFormat } from '../../shared/helpers/formatter.helper';
-import { handleFilter } from '../../shared/helpers/sql.helper';
 import { IFindAllFilter } from '../../shared/interfaces/find-all-filter.interface';
 import { IFindAllOrder } from '../../shared/interfaces/find-all-order.interface';
 import { IGrpcUsuarioService } from '../../shared/interfaces/grpc-usuario.service';
@@ -22,6 +21,8 @@ import { ExportPdfService } from '../../shared/services/export-pdf.service';
 import { CreatePessoaDto } from './dto/create-pessoa.dto';
 import { UpdatePessoaDto } from './dto/update-pessoa.dto';
 import { Pessoa } from './entities/pessoa.entity';
+import { handleFilter } from 'src/shared/helpers/sql.helper';
+import { IResponse } from 'src/shared/interfaces/response.interface';
 
 @Injectable()
 export class PessoaService {
@@ -57,20 +58,18 @@ export class PessoaService {
     size: number,
     order: IFindAllOrder,
     filter?: IFindAllFilter | IFindAllFilter[],
-  ): Promise<Pessoa[]> {
-    page--;
-
+  ): Promise<IResponse<Pessoa[]>> {
     const where = handleFilter(filter);
 
-    return await this.repository.find({
+    const [data, count] = await this.repository.findAndCount({
       loadEagerRelations: false,
-      order: {
-        [order.column]: order.sort,
-      },
+      order: { [order.column]: order.sort },
       where,
       skip: size * page,
       take: size,
     });
+
+    return { data, count, message: null };
   }
 
   async findOne(id: number): Promise<Pessoa> {
@@ -97,7 +96,7 @@ export class PessoaService {
 
     if (!finded) {
       throw new HttpException(
-        EMensagem.IMPOSSIVEL_ALTERAR,
+        EMensagem.IMPOSSIVEL_DESATIVAR,
         HttpStatus.NOT_ACCEPTABLE,
       );
     }

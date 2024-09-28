@@ -20,7 +20,7 @@ import { UpdatePessoaDto } from './dto/update-pessoa.dto';
 import { Pessoa } from './entities/pessoa.entity';
 import { PessoaService } from './pessoa.service';
 
-@Controller('pessoa')
+@Controller('')
 export class PessoaController {
   constructor(private readonly pessoaService: PessoaService) {}
 
@@ -41,14 +41,19 @@ export class PessoaController {
     @Query('filter', ParseFindAllFilterPipe)
     filter: IFindAllFilter | IFindAllFilter[],
   ): Promise<IResponse<Pessoa[]>> {
-    const data = await this.pessoaService.findAll(page, size, order, filter);
+    const { data, count } = await this.pessoaService.findAll(
+      page,
+      size,
+      order,
+      filter,
+    );
 
-    return new HttpResponse<Pessoa[]>(data);
+    return new HttpResponse<Pessoa[]>(data, undefined, count);
   }
 
   @Get(':id')
   async findOne(@Param('id') id: number): Promise<IResponse<Pessoa>> {
-    const data = await this.pessoaService.findOne(+id);
+    const data = await this.pessoaService.findOne(id);
 
     return new HttpResponse<Pessoa>(data);
   }
@@ -58,14 +63,14 @@ export class PessoaController {
     @Param('id') id: number,
     @Body() updatePessoaDto: UpdatePessoaDto,
   ): Promise<IResponse<Pessoa>> {
-    const data = await this.pessoaService.update(+id, updatePessoaDto);
+    const data = await this.pessoaService.update(id, updatePessoaDto);
 
-    return new HttpResponse<Pessoa>(data).onUpdated();
+    return new HttpResponse<Pessoa>(data).onUpdate();
   }
 
   @Delete(':id')
   async unactivate(@Param('id') id: number): Promise<IResponse<boolean>> {
-    const data = await this.pessoaService.unactivate(+id);
+    const data = await this.pessoaService.unactivate(id);
 
     return new HttpResponse<boolean>(data).onUnactivated();
   }

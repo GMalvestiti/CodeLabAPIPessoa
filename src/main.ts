@@ -8,7 +8,7 @@ import { ResponseTransformInterceptor } from './shared/interceptors/response-tra
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1/pessoa');
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -17,27 +17,22 @@ async function bootstrap() {
   );
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
   app.useGlobalFilters(new ResponseExceptionsFilter());
-
   app.enableCors();
 
   setupOpenAPI(app);
 
   await app.listen(3004);
 
-  Logger.log(
-    `Application is running on: ${await app.getUrl()}`,
-    'CodeLabAPIPessoa',
-  );
+  Logger.log(`Application is running on: ${await app.getUrl()}`, 'APIPessoa');
 }
 
 bootstrap();
 
 function setupOpenAPI(app: INestApplication): void {
-  if (process.env.NODE_ENV === 'development') {
-    const config = new DocumentBuilder().setTitle('CodeLabAPIPessoa').build();
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('docs', app, document, { useGlobalPrefix: true });
+  const config = new DocumentBuilder().setTitle('APIPessoa').build();
+  const document = SwaggerModule.createDocument(app, config);
 
-    Logger.log(`Swagger UI is running on path /docs`, 'CodeLabAPIPessoa');
-  }
+  SwaggerModule.setup('docs', app, document, { useGlobalPrefix: true });
+
+  Logger.log('OpenAPI is running on http://localhost:3003/api/v1/docs');
 }
