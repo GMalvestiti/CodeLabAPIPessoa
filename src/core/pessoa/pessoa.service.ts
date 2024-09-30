@@ -13,16 +13,16 @@ import { Repository } from 'typeorm';
 import { EnviarEmailDto } from '../../shared/dtos/enviar-email.dto';
 import { EMensagem } from '../../shared/enums/mensagem.enum';
 import { mobilePhoneFormat } from '../../shared/helpers/formatter.helper';
+import { handleFilter } from '../../shared/helpers/sql.helper';
 import { IFindAllFilter } from '../../shared/interfaces/find-all-filter.interface';
 import { IFindAllOrder } from '../../shared/interfaces/find-all-order.interface';
 import { IGrpcUsuarioService } from '../../shared/interfaces/grpc-usuario.service';
+import { IResponse } from '../../shared/interfaces/response.interface';
 import { IUsuario } from '../../shared/interfaces/usuario.interface';
 import { ExportPdfService } from '../../shared/services/export-pdf.service';
 import { CreatePessoaDto } from './dto/create-pessoa.dto';
 import { UpdatePessoaDto } from './dto/update-pessoa.dto';
 import { Pessoa } from './entities/pessoa.entity';
-import { handleFilter } from 'src/shared/helpers/sql.helper';
-import { IResponse } from 'src/shared/interfaces/response.interface';
 
 @Injectable()
 export class PessoaService {
@@ -188,7 +188,8 @@ export class PessoaService {
       );
     }
   }
-  private async getUsuarioFromGrpc(id: number): Promise<IUsuario> {
+
+  async getUsuarioFromGrpc(id: number): Promise<IUsuario> {
     try {
       return (await lastValueFrom(
         this.grpcUsuarioService.FindOne({ id }),

@@ -24,7 +24,5 @@ export const handleFilter = (filter: IFindAllFilter | IFindAllFilter[]) => {
     Object.assign(whereClause, { [f.column]: Number(f.value) });
   }
 
-  console.log('whereClause', whereClause);
-
   return whereClause;
 };

@@ -1,7 +1,39 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpResponse } from '../../shared/classes/http-response';
 import { EMensagem } from '../../shared/enums/mensagem.enum';
+import { IFindAllFilter } from '../../shared/interfaces/find-all-filter.interface';
+import { IFindAllOrder } from '../../shared/interfaces/find-all-order.interface';
+import { CreatePessoaDto } from './dto/create-pessoa.dto';
+import { UpdatePessoaDto } from './dto/update-pessoa.dto';
+import { Pessoa } from './entities/pessoa.entity';
 import { PessoaController } from './pessoa.controller';
 import { PessoaService } from './pessoa.service';
+
+const mockCreatePessoaDto: CreatePessoaDto = {
+  nome: 'Pessoa de Teste',
+  documento: '12345678901',
+  cep: '12345678',
+  endereco: 'Rua de Teste, 123',
+  telefone: '11987654321',
+  ativo: true,
+};
+
+const mockUpdatePessoaDto: UpdatePessoaDto = Object.assign(
+  mockCreatePessoaDto,
+  { id: 1 },
+);
+
+const mockPessoa: Pessoa = Object.assign(mockCreatePessoaDto, { id: 1 });
+
+const mockFindAllOrder: IFindAllOrder = {
+  column: 'id',
+  sort: 'asc',
+};
+
+const mockFindAllFilter: IFindAllFilter = {
+  column: 'id',
+  value: 1,
+};
 
 describe('PessoaController', () => {
   let controller: PessoaController;
@@ -19,6 +51,7 @@ describe('PessoaController', () => {
             findOne: jest.fn(),
             update: jest.fn(),
             unactivate: jest.fn(),
+            exportPdf: jest.fn(),
           },
         },
       ],
@@ -33,24 +66,14 @@ describe('PessoaController', () => {
   });
 
   describe('create', () => {
-    it('criar um novo usuário', async () => {
-      const createPessoaDto = {
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const mockPessoa = Object.assign(createPessoaDto, { id: 1 });
-
+    it('should create a new pessoa', async () => {
       const spyServiceCreate = jest
         .spyOn(service, 'create')
         .mockReturnValue(Promise.resolve(mockPessoa) as any);
 
-      const response = await controller.create(createPessoaDto);
+      const response = await controller.create(mockCreatePessoaDto);
 
+      expect(response).toBeInstanceOf(HttpResponse);
       expect(response.message).toEqual(EMensagem.SALVO_SUCESSO);
       expect(response.data).toEqual(mockPessoa);
       expect(spyServiceCreate).toHaveBeenCalled();
@@ -58,89 +81,88 @@ describe('PessoaController', () => {
   });
 
   describe('findAll', () => {
-    it('obter uma listagem de usuários', async () => {
-      const mockListaPessoa = [
-        {
-          id: 1,
-          nome: 'Nome Teste',
-          email: 'nome.teste@teste.com',
-          senha: '123456',
-          ativo: true,
-          admin: true,
-          permissao: [],
-        },
-      ];
+    it('should return a list of pessoas', async () => {
+      const mockListaPessoas: Pessoa[] = [mockPessoa];
 
-      const spyServiceFindAll = jest
-        .spyOn(service, 'findAll')
-        .mockReturnValue(Promise.resolve(mockListaPessoa) as any);
+      const spyServiceFindAll = jest.spyOn(service, 'findAll').mockReturnValue(
+        Promise.resolve({
+          data: mockListaPessoas,
+          count: mockListaPessoas.length,
+        }) as any,
+      );
 
-      const response = await controller.findAll(1, 10);
+      const response = await controller.findAll(
+        0,
+        10,
+        mockFindAllOrder,
+        mockFindAllFilter,
+      );
 
-      expect(response.message).toEqual(undefined);
-      expect(response.data).toEqual(mockListaPessoa);
+      expect(response.data).toEqual(mockListaPessoas);
+      expect(response.count).toEqual(mockListaPessoas.length);
       expect(spyServiceFindAll).toHaveBeenCalled();
     });
   });
 
   describe('findOne', () => {
-    it('obter um usuário', async () => {
-      const mockPessoa = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
+    it('should return a pessoa', async () => {
       const spyServiceFindOne = jest
         .spyOn(service, 'findOne')
         .mockReturnValue(Promise.resolve(mockPessoa) as any);
 
       const response = await controller.findOne(1);
 
-      expect(response.message).toEqual(undefined);
-      expect(response.data).toEqual(mockPessoa);
       expect(spyServiceFindOne).toHaveBeenCalled();
+      expect(response.data).toEqual(mockPessoa);
     });
   });
 
   describe('update', () => {
-    it('alterar um usuário', async () => {
-      const mockPessoa = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
+    it('should update a pessoa', async () => {
       const spyServiceUpdate = jest
         .spyOn(service, 'update')
         .mockReturnValue(Promise.resolve(mockPessoa) as any);
 
-      const response = await controller.update(1, mockPessoa);
+      const response = await controller.update(
+        mockUpdatePessoaDto.id,
+        mockUpdatePessoaDto,
+      );
 
+      expect(spyServiceUpdate).toHaveBeenCalled();
       expect(response.message).toEqual(EMensagem.ATUALIZADO_SUCESSO);
       expect(response.data).toEqual(mockPessoa);
-      expect(spyServiceUpdate).toHaveBeenCalled();
     });
   });
 
   describe('unactivate', () => {
-    it('desativar um usuário', async () => {
-      const spyServiceUpdate = jest
+    it('should unactivate a pessoa', async () => {
+      const spyServiceUnactivate = jest
         .spyOn(service, 'unactivate')
-        .mockReturnValue(Promise.resolve(false) as any);
+        .mockReturnValue(Promise.resolve(true) as any);
 
-      const response = await controller.unactivate(1);
+      const response = await controller.unactivate(mockUpdatePessoaDto.id);
 
+      expect(spyServiceUnactivate).toHaveBeenCalled();
       expect(response.message).toEqual(EMensagem.DESATIVADO_SUCESSO);
-      expect(response.data).toEqual(false);
-      expect(spyServiceUpdate).toHaveBeenCalled();
+      expect(response.data).toEqual(true);
+    });
+  });
+
+  describe('exportPdf', () => {
+    it('should export pdf', async () => {
+      const spyServiceExportPdf = jest
+        .spyOn(service, 'exportPdf')
+        .mockReturnValue(Promise.resolve(true) as any);
+
+      const response = await controller.exportPdf(
+        1,
+        mockFindAllOrder,
+        mockFindAllFilter,
+      );
+
+      expect(spyServiceExportPdf).toHaveBeenCalled();
+      expect(response.message).toEqual(EMensagem.INICIADA_GERACAO_PDF);
+      expect(response.data).toEqual(true);
     });
   });
 });

@@ -1,16 +1,71 @@
-import { HttpException } from '@nestjs/common';
+import { HttpException, HttpStatus } from '@nestjs/common';
+import { ClientGrpc, ClientProxy } from '@nestjs/microservices';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EMensagem } from '../../shared/enums/mensagem.enum';
+import { IFindAllFilter } from '../../shared/interfaces/find-all-filter.interface';
+import { IFindAllOrder } from '../../shared/interfaces/find-all-order.interface';
+import { IUsuario } from '../../shared/interfaces/usuario.interface';
+import { ExportPdfService } from '../../shared/services/export-pdf.service';
+import { CreatePessoaDto } from './dto/create-pessoa.dto';
+import { UpdatePessoaDto } from './dto/update-pessoa.dto';
 import { Pessoa } from './entities/pessoa.entity';
 import { PessoaService } from './pessoa.service';
+
+const mockCreatePessoaDto: CreatePessoaDto = {
+  nome: 'Teste Pessoa',
+  documento: '12345678901',
+  cep: '12345678',
+  endereco: 'Rua Teste',
+  telefone: '11999999999',
+  ativo: true,
+};
+
+const mockUpdatePessoaDto: UpdatePessoaDto = Object.assign(
+  mockCreatePessoaDto,
+  { id: 1 },
+);
+const mockPessoa: Pessoa = Object.assign(mockCreatePessoaDto, { id: 1 });
+
+const mockFindAllOrder: IFindAllOrder = {
+  column: 'id',
+  sort: 'asc',
+};
+
+const mockFindAllFilter: IFindAllFilter = {
+  column: 'id',
+  value: 1,
+};
+
+const mockUsuario: IUsuario = {
+  id: 1,
+  nome: 'Usuário Teste',
+  email: 'usuario@gmail.com',
+};
 
 describe('PessoaService', () => {
   let service: PessoaService;
   let repository: Repository<Pessoa>;
+  let grpcUsuarioService: ClientGrpc;
+  let mailService: ClientProxy;
+  let exportPdfService: ExportPdfService;
 
   beforeEach(async () => {
+    grpcUsuarioService = {
+      getService: jest.fn().mockReturnValue({
+        FindOne: jest.fn(),
+      }),
+    } as unknown as ClientGrpc;
+
+    mailService = {
+      emit: jest.fn(),
+    } as unknown as ClientProxy;
+
+    exportPdfService = {
+      export: jest.fn(),
+    } as unknown as ExportPdfService;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PessoaService,
@@ -20,14 +75,26 @@ describe('PessoaService', () => {
             create: jest.fn(),
             save: jest.fn(),
             findOne: jest.fn(),
+            findAndCount: jest.fn(),
             find: jest.fn(),
           },
+        },
+        {
+          provide: 'GRPC_USUARIO',
+          useValue: grpcUsuarioService,
+        },
+        {
+          provide: 'MAIL_SERVICE',
+          useValue: mailService,
+        },
+        {
+          provide: ExportPdfService,
+          useValue: exportPdfService,
         },
       ],
     }).compile();
 
     service = module.get<PessoaService>(PessoaService);
-
     repository = module.get<Repository<Pessoa>>(getRepositoryToken(Pessoa));
   });
 
@@ -36,227 +103,140 @@ describe('PessoaService', () => {
   });
 
   describe('create', () => {
-    it('criar um novo usuário', async () => {
-      const createPessoaDto = {
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const mockPessoa = Object.assign(createPessoaDto, { id: 1 });
-
-      const spyRepositorySave = jest
-        .spyOn(repository, 'save')
-        .mockReturnValue(Promise.resolve(mockPessoa) as any);
-
-      const response = await service.create(createPessoaDto);
-
+    it('should create a new pessoa', async () => {
+      jest.spyOn(repository, 'save').mockResolvedValue(mockPessoa);
+      const response = await service.create(mockCreatePessoaDto);
       expect(response).toEqual(mockPessoa);
-      expect(spyRepositorySave).toHaveBeenCalled();
-    });
-
-    it('lançar erro ao repetir um email quando criar um novo pessoa', async () => {
-      const createPessoaDto = {
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const mockPessoa = Object.assign(createPessoaDto, { id: 1 });
-
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'findOne')
-        .mockReturnValue(Promise.resolve(mockPessoa) as any);
-
-      try {
-        await service.create(createPessoaDto);
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(HttpException);
-        expect(error.message).toBe(EMensagem.IMPOSSIVEL_CADASTRAR);
-        expect(spyRepositoryFindOne).toHaveBeenCalled();
-      }
     });
   });
 
   describe('findAll', () => {
-    it('obter uma listagem de usuários', async () => {
-      const mockListaPessoa = [
-        {
-          id: 1,
-          nome: 'Nome Teste',
-          email: 'nome.teste@teste.com',
-          senha: '123456',
-          ativo: true,
-          admin: true,
-          permissao: [],
-        },
-      ];
-
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'find')
-        .mockReturnValue(Promise.resolve(mockListaPessoa) as any);
-
-      const response = await service.findAll(1, 10);
-
-      expect(response).toEqual(mockListaPessoa);
-      expect(spyRepositoryFindOne).toHaveBeenCalled();
+    it('should return a list of pessoas', async () => {
+      const mockListaPessoa = [mockPessoa];
+      jest
+        .spyOn(repository, 'findAndCount')
+        .mockResolvedValue([mockListaPessoa, mockListaPessoa.length]);
+      const response = await service.findAll(
+        0,
+        10,
+        mockFindAllOrder,
+        mockFindAllFilter,
+      );
+      expect(response.data).toEqual(mockListaPessoa);
+      expect(response.count).toEqual(mockListaPessoa.length);
     });
   });
 
   describe('findOne', () => {
-    it('obter um usuário', async () => {
-      const mockPessoa = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'findOne')
-        .mockReturnValue(Promise.resolve(mockPessoa) as any);
-
-      const response = await service.findOne(1);
-
+    it('should return a pessoa', async () => {
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockPessoa);
+      const response = await service.findOne(mockPessoa.id);
       expect(response).toEqual(mockPessoa);
-      expect(spyRepositoryFindOne).toHaveBeenCalled();
     });
   });
 
   describe('update', () => {
-    it('alterar um usuário', async () => {
-      const updatePessoaDto = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const mockPessoa = Object.assign(updatePessoaDto, {});
-
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'findOne')
-        .mockReturnValue(Promise.resolve(mockPessoa) as any);
-
-      const spyRepositorySave = jest
-        .spyOn(repository, 'save')
-        .mockReturnValue(Promise.resolve(mockPessoa) as any);
-
-      const response = await service.update(1, updatePessoaDto);
-
-      expect(response).toEqual(updatePessoaDto);
-      expect(spyRepositoryFindOne).toHaveBeenCalled();
-      expect(spyRepositorySave).toHaveBeenCalled();
+    it('should update a pessoa', async () => {
+      jest.spyOn(repository, 'save').mockResolvedValue(mockPessoa);
+      const response = await service.update(
+        mockUpdatePessoaDto.id,
+        mockUpdatePessoaDto,
+      );
+      expect(response).toEqual(mockUpdatePessoaDto);
     });
 
-    it('lançar erro ao enviar ids diferentes quando alterar um pessoa', async () => {
-      const updatePessoaDto = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      try {
-        await service.update(2, updatePessoaDto);
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(HttpException);
-        expect(error.message).toBe(EMensagem.IDS_DIFERENTES);
-      }
-    });
-
-    it('lançar erro ao repetir um email já utilizado quando alterar um pessoa', async () => {
-      const updatePessoaDto = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const mockPessoaFindOne = {
-        id: 2,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: 'abcdef',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'findOne')
-        .mockReturnValue(Promise.resolve(mockPessoaFindOne) as any);
-
-      try {
-        await service.update(1, updatePessoaDto);
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(HttpException);
-        expect(error.message).toBe(EMensagem.IMPOSSIVEL_ALTERAR);
-        expect(spyRepositoryFindOne).toHaveBeenCalled();
-      }
+    it('should throw an error when ids are different', async () => {
+      await expect(service.update(2, mockUpdatePessoaDto)).rejects.toThrow(
+        new HttpException(EMensagem.IDS_DIFERENTES, HttpStatus.NOT_ACCEPTABLE),
+      );
     });
   });
 
   describe('unactivate', () => {
-    it('desativar um usuário', async () => {
-      const mockPessoaFindOne = {
-        id: 1,
-        nome: 'Nome Teste',
-        email: 'nome.teste@teste.com',
-        senha: '123456',
-        ativo: true,
-        admin: true,
-        permissao: [],
-      };
-
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'findOne')
-        .mockReturnValue(Promise.resolve(mockPessoaFindOne) as any);
-
-      const mockPessoaSave = Object.assign(mockPessoaFindOne, {
-        ativo: false,
-      });
-
-      const spyRepositorySave = jest
+    it('should unactivate a pessoa', async () => {
+      const findedPessoa = Object.assign(mockPessoa, { ativo: true });
+      jest.spyOn(repository, 'findOne').mockResolvedValue(findedPessoa);
+      jest
         .spyOn(repository, 'save')
-        .mockReturnValue(Promise.resolve(mockPessoaSave) as any);
-
-      const response = await service.unactivate(1);
-
-      expect(response).toEqual(false);
-      expect(spyRepositoryFindOne).toHaveBeenCalled();
-      expect(spyRepositorySave).toHaveBeenCalled();
+        .mockResolvedValue(Object.assign(findedPessoa, { ativo: false }));
+      const response = await service.unactivate(findedPessoa.id);
+      expect(response).toBe(false);
     });
 
-    it('lançar erro ao não encontrar o pessoa usando o id quando alterar um pessoa', async () => {
-      const spyRepositoryFindOne = jest
-        .spyOn(repository, 'findOne')
-        .mockReturnValue(Promise.resolve(null) as any);
+    it('should throw an error when pessoa is not found', async () => {
+      jest.spyOn(repository, 'findOne').mockResolvedValue(null);
+      await expect(service.unactivate(mockPessoa.id)).rejects.toThrow(
+        new HttpException(
+          EMensagem.IMPOSSIVEL_DESATIVAR,
+          HttpStatus.NOT_ACCEPTABLE,
+        ),
+      );
+    });
+  });
+
+  describe('exportPdf', () => {
+    it('should export PDF and send email', async () => {
+      jest
+        .spyOn(service, 'getUsuarioFromGrpc')
+        .mockReturnValue(Promise.resolve(mockUsuario));
+
+      const mockListaProdutos = [mockPessoa];
+      jest
+        .spyOn(repository, 'find')
+        .mockReturnValue(Promise.resolve(mockListaProdutos));
+
+      const mockFilePath = '/tmp/export';
+      jest
+        .spyOn(exportPdfService, 'export')
+        .mockReturnValue(Promise.resolve(mockFilePath));
+
+      jest
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        .spyOn(require('fs'), 'readFileSync')
+        .mockReturnValue(Buffer.from('dummy base64 content'));
+
+      const result = await service.exportPdf(
+        1,
+        mockFindAllOrder,
+        mockFindAllFilter,
+      );
+
+      expect(result).toBe(true);
+      expect(exportPdfService.export).toHaveBeenCalled();
+      expect(mailService.emit).toHaveBeenCalled();
+    });
+
+    it('should throw an error when user is not found', async () => {
+      const mockUsuarioNotFound = Object.assign(mockUsuario, { id: 0 });
+
+      jest
+        .spyOn(service, 'getUsuarioFromGrpc')
+        .mockReturnValue(Promise.resolve(mockUsuarioNotFound));
 
       try {
-        await service.unactivate(1);
+        await service.exportPdf(1, mockFindAllOrder, mockFindAllFilter);
       } catch (error: any) {
-        expect(error).toBeInstanceOf(HttpException);
-        expect(error.message).toBe(EMensagem.IMPOSSIVEL_ALTERAR);
-        expect(spyRepositoryFindOne).toHaveBeenCalled();
+        expect(error.message).toBe(EMensagem.ERRO_EXPORTAR_PDF);
+      }
+    });
+
+    it('should throw an error when there is an error exporting PDF', async () => {
+      jest
+        .spyOn(service, 'getUsuarioFromGrpc')
+        .mockReturnValue(Promise.resolve(mockUsuario));
+
+      jest
+        .spyOn(repository, 'find')
+        .mockReturnValue(Promise.resolve([mockPessoa]));
+
+      jest
+        .spyOn(exportPdfService, 'export')
+        .mockRejectedValue(new Error('Export error'));
+
+      try {
+        await service.exportPdf(1, mockFindAllOrder, mockFindAllFilter);
+      } catch (error: any) {
+        expect(error.message).toBe(EMensagem.ERRO_EXPORTAR_PDF);
       }
     });
   });
